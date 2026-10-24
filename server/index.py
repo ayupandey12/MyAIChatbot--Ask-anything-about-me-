@@ -1,8 +1,13 @@
 from groq import Groq
 from dotenv import load_dotenv
 from pypdf import PdfReader
-from pydantic import BaseModel
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
+from pydantic import BaseModel, Field, field_validator
 import os
+from collections.abc import Iterator
+
 file_path='./ayushresumemain-1.pdf'
 if not os.path.exists(file_path):
       raise FileNotFoundError(f"File not found at: {file_path}")
@@ -36,18 +41,60 @@ ONE SHOT: example - someone ask what ayush know in frontend so read the thing fo
 
 FALLBACK: Ask only about ayush , i am his AICHATBOT.
 """
+
 message1 = {
     "role": "system",
     "content": system_prompt
 }
 
-message2 = {
-    "role": "user",
-    "content": "did ayush has work on project which include cloudflare"
-}
-response = client.chat.completions.create(
-    messages=[message1,message2],
-    model=model
+app = FastAPI(title="Ayush's Personal AI Chatbot")
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=os.getenv("FRONTEND_ORIGINS", "*").split(","),
+    allow_methods=["GET", "POST"],
+    allow_headers=["Content-Type"],
 )
 
-print(response.choices[0].message.content)
+
+class ChatRequest(BaseModel):
+    question: str = Field(min_length=1, max_length=2000)
+
+    @field_validator("question")
+    @classmethod
+    def question_must_not_be_blank(cls, question: str) -> str:
+        question = question.strip()
+        if not question:
+            raise ValueError("Question must not be blank.")
+        return question
+
+
+@app.get("/health")
+def health_check() -> dict[str, str]:
+    return {"status": "ok"}
+
+
+@app.post("/chat")
+def chat(request: ChatRequest) -> StreamingResponse:
+    completion_stream = client.chat.completions.create(
+        messages=[
+            message1,
+            {"role": "user", "content": request.question},
+        ],
+        model=model,
+        stream=True,
+    )
+
+    def response_chunks() -> Iterator[str]:
+        try:
+            for chunk in completion_stream:
+                if not chunk.choices:
+                    continue
+                content = chunk.choices[0].delta.content
+                if content:
+                    yield content
+        finally:
+            completion_stream.close()
+
+    return StreamingResponse(response_chunks(), media_type="text/plain")
+
+
