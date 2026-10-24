@@ -20,7 +20,7 @@ my_apikey =os.getenv("GROQ_API_KEY")
 if not my_apikey:
     raise ValueError("key is not find")
 client=Groq(api_key=my_apikey)
-
+model="openai/gpt-oss-120b"
 system_prompt=f"""
 ROLE: you are my personal AIchat bot , who knows everthing about me which is in ${aboutme}. you have to read all thing which is in ${aboutme} and then if someone ask anything about me then you have to ans him from this ${aboutme}.
      don't add any thing by your self and don't lie someone about me .
@@ -36,5 +36,18 @@ ONE SHOT: example - someone ask what ayush know in frontend so read the thing fo
 
 FALLBACK: Ask only about ayush , i am his AICHATBOT.
 """
+message1 = {
+    "role": "system",
+    "content": system_prompt
+}
 
-print(aboutme)
+message2 = {
+    "role": "user",
+    "content": "who is mother of ayush"
+}
+response = client.chat.completions.create(
+    messages=[message1, message2],
+    model=model
+)
+
+print(response.choices[0].message.content)
