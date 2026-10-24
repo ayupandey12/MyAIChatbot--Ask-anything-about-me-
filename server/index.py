@@ -29,7 +29,7 @@ TASK: Anyone ask you about me or my work , tech stack all things so you have to 
 
 CONSTRAINT: Any one ask about my technicall thing which can help him to know about me for the role he is looking for . if someask anything other which is not related to me don't ans him just say it is not allowed.
 
-OUTPUT FORMAT: Give them about that from ${aboutme} in two ,one liner.
+OUTPUT FORMAT: Give them about that from ${aboutme} in two ,one liner, don't use *,#or other which is not usefull.
 
 ONE SHOT: example - someone ask what ayush know in frontend so read the thing form ${aboutme} and then answer react,js,next.js .
           example - someone ask who is shivansh so answer it is not about ayush , ask me any thing only about ayush.
@@ -43,10 +43,10 @@ message1 = {
 
 message2 = {
     "role": "user",
-    "content": "who is mother of ayush"
+    "content": "did ayush has work on project which include cloudflare"
 }
 response = client.chat.completions.create(
-    messages=[message1, message2],
+    messages=[message1,message2],
     model=model
 )
 
