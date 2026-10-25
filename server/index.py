@@ -4,9 +4,10 @@ from pypdf import PdfReader
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 import os
 from collections.abc import Iterator
+from typing import Literal
 
 file_path='./ayushresumemain-1.pdf'
 if not os.path.exists(file_path):
@@ -32,7 +33,7 @@ ROLE: you are my personal AIchat bot , who knows everthing about me which is in 
 
 TASK: Anyone ask you about me or my work , tech stack all things so you have to ans him but don't add anything by your self . just give him true knowledge from ${aboutme}.
 
-CONSTRAINT: Any one ask about my technicall thing which can help him to know about me for the role he is looking for . if someask anything other which is not related to me don't ans him just say it is not allowed.
+CONSTRAINT: Any one ask about my technicall thing which can help him to know about me for the role he is looking for . if someask anything other which is not related/personal details as mother name ,father name,height etc  to me don't ans him just say it is not allowed.
 
 OUTPUT FORMAT: Give them about that from ${aboutme} in two ,one liner, don't use *,#or other which is not usefull.
 
@@ -41,11 +42,6 @@ ONE SHOT: example - someone ask what ayush know in frontend so read the thing fo
 
 FALLBACK: Ask only about ayush , i am his AICHATBOT.
 """
-
-message1 = {
-    "role": "system",
-    "content": system_prompt
-}
 
 app = FastAPI(title="Ayush's Personal AI Chatbot")
 app.add_middleware(
@@ -56,16 +52,27 @@ app.add_middleware(
 )
 
 
-class ChatRequest(BaseModel):
-    question: str = Field(min_length=1, max_length=2000)
+class ChatMessage(BaseModel):
+    role: Literal["user", "assistant"]
+    content: str = Field(min_length=1, max_length=2000)
 
-    @field_validator("question")
+    @field_validator("content")
     @classmethod
-    def question_must_not_be_blank(cls, question: str) -> str:
-        question = question.strip()
-        if not question:
-            raise ValueError("Question must not be blank.")
-        return question
+    def content_must_not_be_blank(cls, content: str) -> str:
+        content = content.strip()
+        if not content:
+            raise ValueError("Message content must not be blank.")
+        return content
+
+
+class ChatRequest(BaseModel):
+    messages: list[ChatMessage] = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def last_message_must_be_from_user(self) -> "ChatRequest":
+        if self.messages[-1].role != "user":
+            raise ValueError("The last message must be from the user.")
+        return self
 
 
 @app.get("/health")
@@ -77,8 +84,11 @@ def health_check() -> dict[str, str]:
 def chat(request: ChatRequest) -> StreamingResponse:
     completion_stream = client.chat.completions.create(
         messages=[
-            message1,
-            {"role": "user", "content": request.question},
+            {"role": "system", "content": system_prompt},
+            *[
+                {"role": message.role, "content": message.content}
+                for message in request.messages
+            ],
         ],
         model=model,
         stream=True,
@@ -96,5 +106,3 @@ def chat(request: ChatRequest) -> StreamingResponse:
             completion_stream.close()
 
     return StreamingResponse(response_chunks(), media_type="text/plain")
-
-
