@@ -6,6 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field, field_validator, model_validator
 import os
+import json
 from collections.abc import Iterator
 from typing import Literal
 
@@ -20,6 +21,14 @@ for page in w.pages:
 aboutme +=""" 
    additional i have done leetcode and i have contest ranking about 1590 . in leetcode i solved 650 questions .I done my 10th form svm inter college and i got 78.33 percentage in 2018.
    I made a app name autotweet which tweets on behalf of user in their tweeter account, it uses bullmq,redis,next.js,node.js,express.js as tech stack.
+   linkdein url:-"https://www.linkedin.com/in/ayush-pandey-351509263/",
+   github url:-"https://github.com/ayupandey12",
+   portfolio url:-" https://portfolio-phi-sable-56.vercel.app/"
+   paynow projecturl:-"https://github.com/ayupandey12/Paynow",
+   blogbook projecturl:-"https://blogbook-eight.vercel.app/",
+   gupshup projecturl:-"https://gupshup-web.vercel.app/",
+   resume -" https://drive.google.com/file/d/1xj6Wk6oBZkrUSkikjTWngRy0lXfQjl5s/view?usp=drive_link",
+   twitter url:-" https://x.com/ayu_dev1"
 """
 load_dotenv()
 my_apikey =os.getenv("GROQ_API_KEY")
@@ -101,8 +110,15 @@ def chat(request: ChatRequest) -> StreamingResponse:
                     continue
                 content = chunk.choices[0].delta.content
                 if content:
-                    yield content
+                    yield f"data: {json.dumps(content, ensure_ascii=False)}\n\n"
         finally:
             completion_stream.close()
 
-    return StreamingResponse(response_chunks(), media_type="text/plain")
+    return StreamingResponse(
+        response_chunks(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache, no-transform",
+            "X-Accel-Buffering": "no",
+        },
+    )

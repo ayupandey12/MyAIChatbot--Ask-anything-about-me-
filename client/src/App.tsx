@@ -72,7 +72,10 @@ function App() {
     try {
       const response = await fetch(`${apiUrl}/chat`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'text/event-stream',
+        },
         body: JSON.stringify({
           messages: conversation.map(({ role, content }) => ({ role, content })),
         }),
@@ -90,34 +93,49 @@ function App() {
       const reader = response.body.getReader()
       const decoder = new TextDecoder()
       let receivedOutput = false
+      let eventBuffer = ''
 
-      while (true) {
-        const { done, value } = await reader.read()
-        if (done) break
+      const appendEvent = (event: string) => {
+        const data = event
+          .split(/\r?\n/)
+          .filter((line) => line.startsWith('data:'))
+          .map((line) => line.slice(5).trimStart())
+          .join('\n')
 
-        const chunk = decoder.decode(value, { stream: true })
-        if (chunk && requestIdRef.current === requestId) {
-          receivedOutput = true
-          setMessages((current) =>
-            current.map((message) =>
-              message.id === assistantId
-                ? { ...message, content: message.content + chunk }
-                : message,
-            ),
-          )
+        if (!data) return
+
+        const chunk: unknown = JSON.parse(data)
+        if (typeof chunk !== 'string') {
+          throw new Error('The server returned an invalid stream event.')
         }
-      }
 
-      const finalChunk = decoder.decode()
-      if (finalChunk && requestIdRef.current === requestId) {
         receivedOutput = true
         setMessages((current) =>
           current.map((message) =>
             message.id === assistantId
-              ? { ...message, content: message.content + finalChunk }
+              ? { ...message, content: message.content + chunk }
               : message,
           ),
         )
+      }
+
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) {
+          eventBuffer += decoder.decode()
+          break
+        }
+
+        eventBuffer += decoder.decode(value, { stream: true })
+        const events = eventBuffer.split(/\r?\n\r?\n/)
+        eventBuffer = events.pop() ?? ''
+        if (requestIdRef.current === requestId) {
+          events.forEach(appendEvent)
+        }
+      }
+
+      if (eventBuffer.trim() && requestIdRef.current === requestId) {
+        appendEvent(eventBuffer)
       }
       if (!receivedOutput) {
         throw new Error('The server returned an empty response.')
